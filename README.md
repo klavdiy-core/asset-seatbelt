@@ -81,6 +81,9 @@ Not an Unreal project? Set `"watch": ["assets", "levels"]` and it guards those f
   through a variable or a subshell (`$DIR/x`, `$(...)`, `%VAR%`) cannot be known before it runs: the call is asked
   about, never waved through. Before 0.2.1 the quoted path was split at the space and the delete went ahead with no
   snapshot and no word — found by an external review, fixed in 9e444ca.
+- A nested shell (`bash -c`, `bash -lc`, `zsh -ic`, `pwsh -c`, `cmd /c`, `eval`, `ssh`) expands variables inside single
+  quotes, so those are asked about too. A delete written inside another language (`python -c 'os.remove(...)'`) is
+  not read: that is code, not a shell command.
 - It recognises writes by the tool's **name**. A tool called `do_it` that deletes things is invisible to it; add its words via `extra_verbs`.
 - Not yet tested against Epic's plugin itself (tool names may differ); tested against Unreal-style projects (Content, plugin mounts, `.uasset`/`.umap`, object paths) and real Claude Code hook input. If your plugin's tool names slip through, an issue with the name helps.
 
