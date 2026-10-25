@@ -177,13 +177,18 @@ def _tokens(s):
     keeps Windows back-slashes; its quotes are stripped here. A candidate only counts if it exists, so extra ones cost
     nothing."""
     import shlex
-    out = [t for t in re.split(r"[\s\"',;]+", s) if t]
+    # the whole string first: a Write/Edit file_path is one path, no quotes, and was split at its space (Tsaplya)
+    out = [s.strip()] + [t for t in re.split(r"[\s\"',;]+", s) if t]
     try:
         out += [t[1:-1] if len(t) > 1 and t[0] == t[-1] and t[0] in "\"'" else t for t in shlex.split(s, posix=False)]
     except ValueError:                                  # an unclosed quote: take what is inside each quote pair
         out += [a or b for a, b in re.findall(r'"([^"]+)"|\'([^\']+)\'', s)]
         out += re.findall(r'["\']([^"\']+)$', s)        # ...and the text after the quote left open
-    return list(dict.fromkeys(out))
+    try:
+        out += shlex.split(s, posix=True)               # bash escapes: rm my\ art/model.bin (Tsaplya)
+    except ValueError:
+        pass
+    return list(dict.fromkeys(t for t in out if t))
 
 
 UNRESOLVED = re.compile(r"\$\{?\w+|\$\(|`|%\w+%|\$env:", re.I)   # a target named through a variable or a subshell
@@ -377,7 +382,8 @@ def run_hook(stdin_text, project=None):
         how = "named"
         if not files:
             cmd = str(tool_input.get("command", "")) if tool in SHELL_TOOLS else ""
-            if not dirs and UNRESOLVED.search(cmd):
+            # a $ inside single quotes is literal in bash and PowerShell: awk '{print $1}' asked for nothing (Tsaplya)
+            if not dirs and UNRESOLVED.search(re.sub(r"'[^']*'", "''", cmd)):
                 # a destructive command whose target is a variable or a subshell: what it deletes cannot be known
                 # here, so it is never waved through as «nothing we guard» (external review, 25.10)
                 _log(root, {"tool": tool, "decision": "ask", "why": "unresolved target"})
