@@ -77,6 +77,10 @@ Not an Unreal project? Set `"watch": ["assets", "levels"]` and it guards those f
 
 - **It copies files on disk.** Unreal also holds assets in memory. After a restore, close the editor or reload the assets before you save anything, or the editor may write its in-memory version back over the restored files.
 - A delete in Unreal can also rewrite *other* assets that referenced the deleted one (redirectors, fix-ups). Those are only in the snapshot if the call named them or the whole content folder was copied. For big refactors, keep committing to your VCS; this is a seatbelt, not version control.
+- Paths in quotes, with spaces, are read whole (`rm "my art/model.bin"`, `Remove-Item 'my art/x.bin'`). A target named
+  through a variable or a subshell (`$DIR/x`, `$(...)`, `%VAR%`) cannot be known before it runs: the call is asked
+  about, never waved through. Before 0.2.1 the quoted path was split at the space and the delete went ahead with no
+  snapshot and no word — found by an external review, fixed in <commit>.
 - It recognises writes by the tool's **name**. A tool called `do_it` that deletes things is invisible to it; add its words via `extra_verbs`.
 - Not yet tested against Epic's plugin itself (tool names may differ); tested against Unreal-style projects (Content, plugin mounts, `.uasset`/`.umap`, object paths) and real Claude Code hook input. If your plugin's tool names slip through, an issue with the name helps.
 
