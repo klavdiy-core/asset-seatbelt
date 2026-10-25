@@ -191,6 +191,8 @@ def _tokens(s):
     return list(dict.fromkeys(t for t in out if t))
 
 
+NESTED_SHELL = re.compile(r"\b(eval|(bash|sh|zsh|dash|ksh|pwsh|powershell)(\.exe)?\s+(-\w+\s+)*-(c|command|encodedcommand)"
+                          r"\b|cmd(\.exe)?\s+/[ck]\b|ssh\s|xargs\s+(bash|sh)\b)", re.I)
 UNRESOLVED = re.compile(r"\$\{?\w+|\$\(|`|%\w+%|\$env:", re.I)   # a target named through a variable or a subshell
 
 
@@ -383,7 +385,9 @@ def run_hook(stdin_text, project=None):
         if not files:
             cmd = str(tool_input.get("command", "")) if tool in SHELL_TOOLS else ""
             # a $ inside single quotes is literal in bash and PowerShell: awk '{print $1}' asked for nothing (Tsaplya)
-            if not dirs and UNRESOLVED.search(re.sub(r"'[^']*'", "''", cmd)):
+            # - unless the quotes feed a nested shell, which expands it: bash -c 'rm $TARGET' (Tsaplya, the next pass)
+            seen = cmd if NESTED_SHELL.search(cmd) else re.sub(r"'[^']*'", "''", cmd)
+            if not dirs and UNRESOLVED.search(seen):
                 # a destructive command whose target is a variable or a subshell: what it deletes cannot be known
                 # here, so it is never waved through as «nothing we guard» (external review, 25.10)
                 _log(root, {"tool": tool, "decision": "ask", "why": "unresolved target"})

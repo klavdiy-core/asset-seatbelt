@@ -48,6 +48,15 @@ class QuotedPaths(unittest.TestCase):
         code, out = self.p.hook("Bash", {"command": "rm nothere.bin | awk '{print $1}'"})
         self.assertIsNone(out)
 
+    def test_single_quotes_fed_to_a_nested_shell_are_still_asked_about(self):
+        # Tsaplya: blanking single quotes silenced bash -c 'rm $TARGET' - the inner shell expands it
+        for cmd in ("bash -c 'rm $TARGET'", "sh -c 'rm \"$TARGET\"'", "pwsh -c 'Remove-Item $env:TARGET'",
+                    "eval 'rm $X'"):
+            with self.subTest(cmd=cmd):
+                code, out = self.p.hook("Bash", {"command": cmd})
+                self.assertIsNotNone(out, cmd)
+                self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "ask")
+
     def test_a_named_file_that_does_not_exist_is_not_asked_about(self):
         code, out = self.p.hook("Bash", {"command": "rm build/old.log"})          # nothing to lose
         self.assertIsNone(out)
