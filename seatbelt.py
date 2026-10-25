@@ -10,15 +10,17 @@ content folder is too big to copy, it asks you instead of guessing.
 `seatbelt.py restore <id>` puts them back. Standard library only.
 """
 import argparse
+import glob
 import hashlib
 import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 DEFAULTS = {
     "keep": 20,                 # snapshots to keep
@@ -110,7 +112,9 @@ def _words(name):
 
 def is_destructive(tool_name, tool_input, extra_verbs=()):
     if tool_name in SHELL_TOOLS:
-        return bool(SHELL_DESTRUCTIVE.search(str((tool_input or {}).get("command", ""))))
+        cmd = str((tool_input or {}).get("command", ""))
+        # `git checkout -- x` slipped past the old pattern (no word boundary after "--")
+        return bool(SHELL_DESTRUCTIVE.search(cmd) or GIT_DISCARD.search(cmd) or GIT_CLEAN.search(cmd))
     words = _words(tool_name)
     return bool(words & (WRITE_VERBS | {v.lower() for v in extra_verbs}))
 
@@ -156,8 +160,19 @@ def _unreal_targets(root, path):
     return hits
 
 
+def _inside(root, p):
+    real_root = os.path.realpath(root)
+    try:
+        p = os.path.realpath(p)
+    except (OSError, ValueError):
+        return None
+    if os.path.exists(p) and p != real_root and os.path.commonpath([p, real_root]) == real_root:
+        return p
+    return None
+
+
 def asset_files(root, tool_input, watch=None):
-    """Files under the project that the call's arguments point at."""
+    """Files under the project that the call's arguments point at (globs like art/*.png are expanded)."""
     found = set()
     for s in _strings(tool_input):
         for m in PATH_IN_TEXT.finditer(s):
@@ -167,18 +182,48 @@ def asset_files(root, tool_input, watch=None):
             tok = tok.strip("()[]")
             if not tok or tok.startswith("-") or len(tok) > 400:
                 continue
-            p = tok if os.path.isabs(tok) else os.path.join(root, tok)
-            try:
-                p = os.path.realpath(p)
-            except (OSError, ValueError):
-                continue
-            if os.path.exists(p) and os.path.commonpath([p, os.path.realpath(root)]) == os.path.realpath(root) \
-                    and os.path.realpath(p) != os.path.realpath(root):
+            base = tok if os.path.isabs(tok) else os.path.join(root, tok)
+            matches = glob.glob(base, recursive=True) if glob.has_magic(tok) else [base]
+            for cand in matches:
+                p = _inside(root, cand)
+                if not p:
+                    continue
                 for f in _files_under(p):
                     rel = _rel(root, f)
                     if not rel.startswith(".claude/"):
                         found.add(rel)
     return sorted(found)
+
+
+# only the forms that throw changes away: a branch switch (git checkout main, -b feature) is not one
+GIT_DISCARD = re.compile(r"\bgit\s+(reset\s+--hard|checkout\s+(.*\s)?(-f|--force|--)(\s|$)|checkout\s+\.(\s|$)|"
+                         r"restore\b(?!.*--staged\s*$)|stash\b(?!\s+(list|show)))")
+GIT_CLEAN = re.compile(r"\bgit\s+clean\b([^;&|]*)")
+
+
+def _git_lines(root, *args):
+    r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return r.stdout.splitlines() if r.returncode == 0 else []
+
+
+def git_targets(root, command):
+    """The files a git command destroys without naming them: uncommitted changes for reset --hard / checkout --
+    / restore / stash, and what `git clean` would delete (its own dry run, with the same flags)."""
+    found = set()
+    if GIT_DISCARD.search(command):
+        for line in _git_lines(root, "diff", "--name-only", "HEAD") + _git_lines(root, "diff", "--name-only", "--cached"):
+            if line and os.path.isfile(os.path.join(root, line)):
+                found.add(line.replace("\\", "/"))
+    m = GIT_CLEAN.search(command)
+    if m:
+        flags = [f for f in m.group(1).split() if f.startswith("-") and f not in ("-f", "--force", "-n", "--dry-run", "-i")]
+        flags = [f.replace("f", "") if re.fullmatch(r"-[a-zA-Z]+", f) else f for f in flags]
+        for line in _git_lines(root, "clean", "-n", *[f for f in flags if f not in ("-", "")]):
+            if line.startswith("Would remove "):
+                p = _inside(root, os.path.join(root, line[len("Would remove "):].strip()))
+                if p:
+                    found.update(_rel(root, f) for f in _files_under(p))
+    return sorted(f for f in found if not f.startswith(".claude/"))
 
 
 # ---------- snapshots ----------
@@ -305,6 +350,8 @@ def run_hook(stdin_text, project=None):
     try:
         cfg = load_config(root)
         files = asset_files(root, tool_input)
+        if tool in SHELL_TOOLS:     # git commands that discard work name no files: ask git which ones
+            files = sorted(set(files) | set(git_targets(root, str(tool_input.get("command", "")))))
         dirs = content_dirs(root, cfg)
         if dirs:   # only protect what lives in the content folders
             dirs_rel = [_rel(root, d) + "/" for d in dirs]

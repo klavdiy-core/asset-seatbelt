@@ -30,6 +30,16 @@ python .claude/hooks/seatbelt.py restore 20261024-174352-868853-delete_assets
 
 Standard library only, Python 3.8+. Windows, macOS, Linux.
 
+## Not only Unreal
+
+In any project (no `.uproject`), it guards what a shell command destroys:
+
+- files and folders named in `rm`, `del`, `mv`, `Remove-Item`… inside the project, **globs included** (`rm art/*.png`, `rm -rf build/**`);
+- **`git reset --hard`, `git checkout -- …` / `git checkout .`, `git restore`, `git stash`**: they name no files, so it asks git which ones have uncommitted changes and copies those first;
+- **`git clean -fd`** (and `-x`): it runs git's own dry run with the same flags and copies what would be deleted.
+
+A branch switch (`git checkout main`, `git checkout -b x`) and `git stash list` are left alone. A clean tree takes no snapshot. `"watch": ["assets", "data"]` in `.claude/seatbelt.json` limits it to those folders.
+
 ## Install
 
 From your Unreal project root (the folder with the `.uproject`):
