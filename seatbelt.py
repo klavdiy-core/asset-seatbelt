@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 DEFAULTS = {
     "keep": 20,                 # snapshots to keep
@@ -191,8 +191,10 @@ def _tokens(s):
     return list(dict.fromkeys(t for t in out if t))
 
 
-NESTED_SHELL = re.compile(r"\b(eval|(bash|sh|zsh|dash|ksh|pwsh|powershell)(\.exe)?\s+(-\w+\s+)*-(c|command|encodedcommand)"
-                          r"\b|cmd(\.exe)?\s+/[ck]\b|ssh\s|xargs\s+(bash|sh)\b)", re.I)
+# any flags first (--login, -l), then the command flag: -c alone or glued at the end of a group (-lc, -ic), or the
+# PowerShell words. bash -lc / zsh -ic / bash --login -c slipped through the first form (Tsaplya)
+NESTED_SHELL = re.compile(r"\b(eval|(bash|sh|zsh|dash|ksh|pwsh|powershell)(\.exe)?\s+(--?[\w-]+\s+)*"
+                          r"(-[a-z]*c|-command|-encodedcommand)\b|cmd(\.exe)?\s+/[ck]\b|ssh\s|xargs\s+(bash|sh)\b)", re.I)
 UNRESOLVED = re.compile(r"\$\{?\w+|\$\(|`|%\w+%|\$env:", re.I)   # a target named through a variable or a subshell
 
 

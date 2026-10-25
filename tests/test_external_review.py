@@ -51,7 +51,8 @@ class QuotedPaths(unittest.TestCase):
     def test_single_quotes_fed_to_a_nested_shell_are_still_asked_about(self):
         # Tsaplya: blanking single quotes silenced bash -c 'rm $TARGET' - the inner shell expands it
         for cmd in ("bash -c 'rm $TARGET'", "sh -c 'rm \"$TARGET\"'", "pwsh -c 'Remove-Item $env:TARGET'",
-                    "eval 'rm $X'"):
+                    "eval 'rm $X'", "bash -lc 'rm $TARGET'", "zsh -ic 'rm $TARGET'",
+                    "bash --login -c 'rm $TARGET'"):
             with self.subTest(cmd=cmd):
                 code, out = self.p.hook("Bash", {"command": cmd})
                 self.assertIsNotNone(out, cmd)
