@@ -80,7 +80,7 @@ Not an Unreal project? Set `"watch": ["assets", "levels"]` and it guards those f
 - Paths in quotes, with spaces, are read whole (`rm "my art/model.bin"`, `Remove-Item 'my art/x.bin'`). A target named
   through a variable or a subshell (`$DIR/x`, `$(...)`, `%VAR%`) cannot be known before it runs: the call is asked
   about, never waved through. Before 0.2.1 the quoted path was split at the space and the delete went ahead with no
-  snapshot and no word — found by an external review, fixed in <commit>.
+  snapshot and no word — found by an external review, fixed in 9e444ca.
 - It recognises writes by the tool's **name**. A tool called `do_it` that deletes things is invisible to it; add its words via `extra_verbs`.
 - Not yet tested against Epic's plugin itself (tool names may differ); tested against Unreal-style projects (Content, plugin mounts, `.uasset`/`.umap`, object paths) and real Claude Code hook input. If your plugin's tool names slip through, an issue with the name helps.
 
