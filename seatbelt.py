@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 DEFAULTS = {
     "keep": 20,                 # snapshots to keep
@@ -171,6 +171,24 @@ def _inside(root, p):
     return None
 
 
+def _tokens(s):
+    """Candidate paths in a command: the plain split AND a quote-aware one. `rm "my art/model.bin"` was split at the
+    space into two names that do not exist, so nothing was saved (external review, 25.10). shlex in non-POSIX mode
+    keeps Windows back-slashes; its quotes are stripped here. A candidate only counts if it exists, so extra ones cost
+    nothing."""
+    import shlex
+    out = [t for t in re.split(r"[\s\"',;]+", s) if t]
+    try:
+        out += [t[1:-1] if len(t) > 1 and t[0] == t[-1] and t[0] in "\"'" else t for t in shlex.split(s, posix=False)]
+    except ValueError:                                  # an unclosed quote: take what is inside each quote pair
+        out += [a or b for a, b in re.findall(r'"([^"]+)"|\'([^\']+)\'', s)]
+        out += re.findall(r'["\']([^"\']+)$', s)        # ...and the text after the quote left open
+    return list(dict.fromkeys(out))
+
+
+UNRESOLVED = re.compile(r"\$\{?\w+|\$\(|`|%\w+%|\$env:", re.I)   # a target named through a variable or a subshell
+
+
 def asset_files(root, tool_input, watch=None):
     """Files under the project that the call's arguments point at (globs like art/*.png are expanded)."""
     found = set()
@@ -178,7 +196,7 @@ def asset_files(root, tool_input, watch=None):
         for m in PATH_IN_TEXT.finditer(s):
             for f in _unreal_targets(root, m.group(1)):
                 found.add(_rel(root, f))
-        for tok in re.split(r"[\s\"',;]+", s):
+        for tok in _tokens(s):
             tok = tok.strip("()[]")
             if not tok or tok.startswith("-") or len(tok) > 400:
                 continue
@@ -358,6 +376,14 @@ def run_hook(stdin_text, project=None):
             files = [f for f in files if any(f.startswith(d) for d in dirs_rel)]
         how = "named"
         if not files:
+            cmd = str(tool_input.get("command", "")) if tool in SHELL_TOOLS else ""
+            if not dirs and UNRESOLVED.search(cmd):
+                # a destructive command whose target is a variable or a subshell: what it deletes cannot be known
+                # here, so it is never waved through as «nothing we guard» (external review, 25.10)
+                _log(root, {"tool": tool, "decision": "ask", "why": "unresolved target"})
+                return _ask(f"`{tool}` deletes or overwrites something named through a variable or a subshell, so "
+                            "I cannot tell which files and took no snapshot. Commit or back up first, or allow it if "
+                            "you are sure.")
             if not dirs:
                 return 0   # nothing we guard is involved
             everything = [_rel(root, f) for d in dirs for f in _files_under(d)]
