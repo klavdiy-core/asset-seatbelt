@@ -177,7 +177,7 @@ def _tokens(s):
     keeps Windows back-slashes; its quotes are stripped here. A candidate only counts if it exists, so extra ones cost
     nothing."""
     import shlex
-    # the whole string first: a Write/Edit file_path is one path, no quotes, and was split at its space (Tsaplya)
+    # the whole string first: a Write/Edit file_path is one path, no quotes, and was split at its space (a second review)
     out = [s.strip()] + [t for t in re.split(r"[\s\"',;]+", s) if t]
     try:
         out += [t[1:-1] if len(t) > 1 and t[0] == t[-1] and t[0] in "\"'" else t for t in shlex.split(s, posix=False)]
@@ -185,14 +185,14 @@ def _tokens(s):
         out += [a or b for a, b in re.findall(r'"([^"]+)"|\'([^\']+)\'', s)]
         out += re.findall(r'["\']([^"\']+)$', s)        # ...and the text after the quote left open
     try:
-        out += shlex.split(s, posix=True)               # bash escapes: rm my\ art/model.bin (Tsaplya)
+        out += shlex.split(s, posix=True)               # bash escapes: rm my\ art/model.bin (a second review)
     except ValueError:
         pass
     return list(dict.fromkeys(t for t in out if t))
 
 
 # any flags first (--login, -l), then the command flag: -c alone or glued at the end of a group (-lc, -ic), or the
-# PowerShell words. bash -lc / zsh -ic / bash --login -c slipped through the first form (Tsaplya)
+# PowerShell words. bash -lc / zsh -ic / bash --login -c slipped through the first form (a second review)
 NESTED_SHELL = re.compile(r"\b(eval|(bash|sh|zsh|dash|ksh|pwsh|powershell)(\.exe)?\s+(--?[\w-]+\s+)*"
                           r"(-[a-z]*c|-command|-encodedcommand)\b|cmd(\.exe)?\s+/[ck]\b|ssh\s|xargs\s+(bash|sh)\b)", re.I)
 UNRESOLVED = re.compile(r"\$\{?\w+|\$\(|`|%\w+%|\$env:", re.I)   # a target named through a variable or a subshell
@@ -386,8 +386,8 @@ def run_hook(stdin_text, project=None):
         how = "named"
         if not files:
             cmd = str(tool_input.get("command", "")) if tool in SHELL_TOOLS else ""
-            # a $ inside single quotes is literal in bash and PowerShell: awk '{print $1}' asked for nothing (Tsaplya)
-            # - unless the quotes feed a nested shell, which expands it: bash -c 'rm $TARGET' (Tsaplya, the next pass)
+            # a $ inside single quotes is literal in bash and PowerShell: awk '{print $1}' asked for nothing (a second review)
+            # - unless the quotes feed a nested shell, which expands it: bash -c 'rm $TARGET' (the same review, next pass)
             seen = cmd if NESTED_SHELL.search(cmd) else re.sub(r"'[^']*'", "''", cmd)
             if not dirs and UNRESOLVED.search(seen):
                 # a destructive command whose target is a variable or a subshell: what it deletes cannot be known

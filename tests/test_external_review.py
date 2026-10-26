@@ -34,7 +34,7 @@ class QuotedPaths(unittest.TestCase):
         self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "ask")
 
     def test_write_and_edit_with_a_space_in_file_path_are_saved(self):
-        # Tsaplya: a file_path is one path, no quotes - it was split at the space too
+        # a second review: a file_path is one path, no quotes - it was split at the space too
         self.p.hook("Write", {"file_path": os.path.join(self.p.root, "my art", "model.bin"), "content": "x"})
         self.assertEqual(len(self.p.snapshots()), 1)
         self.p.hook("Edit", {"file_path": "my art/model.bin", "old_string": "a", "new_string": "b"})
@@ -49,7 +49,7 @@ class QuotedPaths(unittest.TestCase):
         self.assertIsNone(out)
 
     def test_single_quotes_fed_to_a_nested_shell_are_still_asked_about(self):
-        # Tsaplya: blanking single quotes silenced bash -c 'rm $TARGET' - the inner shell expands it
+        # a second review: blanking single quotes silenced bash -c 'rm $TARGET' - the inner shell expands it
         for cmd in ("bash -c 'rm $TARGET'", "sh -c 'rm \"$TARGET\"'", "pwsh -c 'Remove-Item $env:TARGET'",
                     "eval 'rm $X'", "bash -lc 'rm $TARGET'", "zsh -ic 'rm $TARGET'",
                     "bash --login -c 'rm $TARGET'"):
